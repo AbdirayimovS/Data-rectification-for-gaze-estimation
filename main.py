@@ -83,7 +83,7 @@ def estimateHeadPose(landmarks, face_model, camera, distortion, iteration=True):
 
     return rvec, tvec
 
-def normalizeFace(img, face, hr, ht, camera_matrix, center):
+def normalizeFace(img, face, hr, ht, camera_matrix, distortion):
     focal_norm = 960
     distance_norm = 600
     roiSize=(300, 300)
@@ -92,6 +92,24 @@ def normalizeFace(img, face, hr, ht, camera_matrix, center):
 
     # Pose rotation vector converted to a rotation matrix
     hR = cv2.Rodrigues(hr)[0] # rotation matrix
+
+    full_face_model_3d_coordinates = np.load("sfm_shape_3448_swook_sted_ready_numpy.npy")
+    
+    points_2d = cv2.projectPoints(full_face_model_3d_coordinates, hr, ht,
+                                 camera_matrix, distortion)[0].reshape(-1, 2)
+    ih, iw, _ = img.shape
+    if np.any(points_2d < 0.0) or np.any(points_2d[:, 0] > iw) \
+            or np.any(points_2d[:, 1] > ih):
+        tmp_image = np.copy(img[:, :, ::-1])
+        for x, y in points_2d:
+            cv2.drawMarker(tmp_image, (int(x), int(y)), color=[0, 0, 255],
+                          markerType=cv2.MARKER_CROSS,
+                          markerSize=2, thickness=1)
+        print('img skipped. Landmarks outside of frame!')
+        cv2.imshow('failed', tmp_image)
+        cv2.waitKey(1)
+        return
+    
     Fc = np.dot(hR, face) + ht # 3D positions of facial landmarks
     
     center = np.zeros(np.array(Fc[:, 0]).shape)
@@ -201,7 +219,7 @@ def main():
                 # Get rotational/translation shift
                 hr, ht = estimateHeadPose(landmarks, facePts, camera_matrix, camera_distortion) # solvePnP needs 3D model for comparison with landmarks of mediapipe
          
-                processed_face2 = normalizeFace(image, face, hr, ht, camera_matrix, center) # COMMENT: for 6-point based model
+                processed_face2 = normalizeFace(image, face, hr, ht, camera_matrix, camera_distortion) # COMMENT: for 6-point based model
 
                 # Show camera image with landmarks
                 cv2.imshow("Cam image", image)
