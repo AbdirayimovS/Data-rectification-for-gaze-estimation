@@ -157,17 +157,13 @@ def main():
                 
                 reshaped_landmarks = landmarks.reshape(num_pts, 1, 2)
           
-                ######################
-                
-                ######## I  must add face landmarks verifier
-                #!!!!!!!!!! #
-
                 # Get rotational/translation shift
                 hr, ht = estimateHeadPose(reshaped_landmarks, facePts, camera_matrix, camera_distortion) # solvePnP needs 3D model for comparison with landmarks of mediapipe
                 ht = ht.reshape((3, 1)) # head translation vector
 
                 # Pose rotation vector converted to a rotation matrix
                 hR = cv2.Rodrigues(hr)[0] # rotation matrix
+
                 Fc = np.dot(hR, face) + ht # 3D positions of facial landmarks
             
                 center = np.zeros(np.array(Fc[:, 0]).shape)
@@ -182,40 +178,23 @@ def main():
 
                 im_face = norm.GetImage(image)
 
-
                 llc = norm.GetNewPos(landmarks[3]) # is this correct order or not?? # YES! VERIFIED
                 lrc = norm.GetNewPos(landmarks[2]) # VERIFIED
                 im_left = norm.CropEye(llc, lrc) # VERIFIED
-                # im_left = dpc.EqualizeHist(im_left)
 
                 rlc = norm.GetNewPos(landmarks[1]) # VERIFIED
                 rrc = norm.GetNewPos(landmarks[0]) # VERIFIED
                 im_right = norm.CropEye(rlc, rrc)
-                # im_right = dpc.EqualizeHist(im_right)
-
 
                 head = norm.GetHeadRot(vector=True)
                 origin = norm.GetCoordinate(center)
                 rvec, svec = norm.GetParams()
-
-                # Which eye left or right logic space
-                #
-                #
-                #
                 
                 rotation_matrix=norm.GetHeadRot(vector=False)
                 rotation_matrix_flipped=dpc.FlipRot(head)
 
-                # # left_eye = norm.GetCoordinate(landmarks[1])
-                # x = (landmarks[1][0] - camera_matrix[0][2]) /camera_matrix[0][0]
-                # y = (landmarks[1][1] - camera_matrix[1][2]) / camera_matrix[1][1]
-
-                re = 0.5*(Fc[:,0] + Fc[:,1]).reshape((3,1)) # center of left eye
-                le = 0.5*(Fc[:,2] + Fc[:,3]).reshape((3,1)) # center of right eye
-
-
-
-
+                re = 0.5*(Fc[:,0] + Fc[:,1]).reshape((3,1)) # center of left eye in 3D CCS
+                le = 0.5*(Fc[:,2] + Fc[:,3]).reshape((3,1)) # center of right eye in 3D CCS
 
                 
                 # Show camera image with landmarks
