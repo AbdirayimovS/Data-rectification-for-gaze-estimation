@@ -17,12 +17,13 @@ Source: https://github.com/xucong-zhang/data-preprocessing-gaze?tab=readme-ov-fi
 
 ## DEMO
 Input: ![input_img.png](demo_camera_image.png)
+
 Output: ![output_img.png](demo_final_data_rectificated_img.png) 
 
 
 ## SETUP
 1. Clone the repository
-2. Create conda environment
+2. Create conda environment or virtual env
 3. Install requirements `pip install -r requirements.txt`
 4. Use [11] to find camera_matrix and distortion value of your camera. Bring the calibration file (.pkl) to current repository
 4. Run `python main.py`
