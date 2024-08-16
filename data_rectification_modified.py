@@ -7,31 +7,27 @@
 # 4. 3D Face Model is here: https://github.com/swook/faze_preprocess/blob/5c33caaa1bc271a8d6aad21837e334108f293683/sfm_face_coordinates.npy
 # 4. MPIIGaze also provides the matlab file for the 3D Face Model 
 
-import pickle
+import yaml
 
 import numpy as np
 import cv2
 import mediapipe as mp
 import scipy.io as sio
 
-import data_processing_core as dpc 
+import data_processing_core as dpc
+from common.face_model_mediapipe import FaceModelMediaPipe
+
+with open("calib_cam0.yaml", "r") as file:
+    calib_data = yaml.safe_load(file)
 
 
 
-with open("calib_cam0.pkl", "rb") as file:
-    calib_data = pickle.load(file)
+TEMPLATE_LANDMARK_INDEX = list(range(468))  # [33, 133, 362, 263, 61, 291] # based on 2 right eye, 2 left eye and 2 mouth
 
-TEMPLATE_LANDMARK_INDEX = [33, # -> right eye right corner
-                           133, # -> right eye left corner 
-                           362, # -> left eye right corner
-                           263, # -> left eye left corner
-                           61, # right lips corner
-                           291, # left lips corner
-                           ] # based on 2 right eye, 2 left eye and 2 mouth
-FACE_KEY_LANDMARK_INDEX = [0, 1, 2, 3, 4, 5] # DUMMY 
+FACE_KEY_LANDMARK_INDEX = [0, 9, 20]
 
-camera_matrix = np.array(calib_data['mtx']) 
-camera_distortion = np.array(calib_data['dist'])
+camera_matrix = np.array(calib_data['camera_matrix']['data']).reshape(3, 3)
+camera_distortion = np.array(calib_data['distortion_coefficients']['data']).reshape(-1, 1)
 
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
@@ -48,12 +44,10 @@ def draw_point(image, mat, spec):
         x = int(arr[0])
         y = int(arr[1])
         cv2.circle(image, (x, y), radius=spec['radius'], color=(rgb[2], rgb[1], rgb[0]), thickness=spec['thickness'])
-        cv2.putText(image, f"{idx}", (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0 , 0, 255), 1)
+        # cv2.putText(image, f"{idx}", (x, y), cv2.FONT_HERSHEY_SIMPLEX, 1, (0 , 0, 255), 1)
         idx +=1
 
-def generate_3d_face():
-    face = sio.loadmat('6_points-based_face_model.mat')['model']
-    return face
+
 
 def process_image(image, face_mesh):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -115,9 +109,8 @@ class Undistorter:
 
 def main():
     undistort = Undistorter()
-
     # Find 3D Standard Face Points
-    face = generate_3d_face() # the template to compare the objects
+    face = FaceModelMediaPipe().LANDMARKS.reshape(3, 468) # the template to compare the objects
     num_pts = face.shape[1] # COMMENT: I add for the 6-point face model 
     facePts = face.reshape(num_pts, 1, 3)
    
@@ -132,12 +125,10 @@ def main():
         min_tracking_confidence=0.5) as face_mesh:
         while cap.isOpened():
             success, image = cap.read()
-            image = undistort(image, 
+            image = undistort(image,
                               camera_matrix,
                               camera_distortion,
                               is_gazecapture=True)
-            # image = cv2.undistort(image, camera_matrix, camera_distortion) # I added it
-
             if not success:
                 print("Ignoring empty camera frame.")
                 continue
@@ -154,9 +145,8 @@ def main():
                 
                 # Convert 2D landmark pixels to 3D
                 landmarks = landmarks.astype(np.float32)
-                
                 reshaped_landmarks = landmarks.reshape(num_pts, 1, 2)
-          
+        
                 # Get rotational/translation shift
                 hr, ht = estimateHeadPose(reshaped_landmarks, facePts, camera_matrix, camera_distortion) # solvePnP needs 3D model for comparison with landmarks of mediapipe
                 ht = ht.reshape((3, 1)) # head translation vector
@@ -174,30 +164,28 @@ def main():
                 norm = dpc.norm(center = center, # how to calculate it?
                                 headrotvec = hR,
                                 imsize = (224, 224),
-                                camparams = camera_matrix)
+                                camparams = camera_matrix,
+                                newfocal=960,
+                                newdistance=0.6,
+                                )
 
                 im_face = norm.GetImage(image)
-
-                llc = norm.GetNewPos(landmarks[3]) # is this correct order or not?? # YES! VERIFIED
-                lrc = norm.GetNewPos(landmarks[2]) # VERIFIED
+                llc = norm.GetNewPos(landmarks[263]) # is this correct order or not?? # YES! VERIFIED
+                lrc = norm.GetNewPos(landmarks[362]) # VERIFIED
                 im_left = norm.CropEye(llc, lrc) # VERIFIED
-
-                rlc = norm.GetNewPos(landmarks[1]) # VERIFIED
-                rrc = norm.GetNewPos(landmarks[0]) # VERIFIED
+                rlc = norm.GetNewPos(landmarks[133]) # VERIFIED
+                rrc = norm.GetNewPos(landmarks[33]) # VERIFIED
                 im_right = norm.CropEye(rlc, rrc)
-
                 head = norm.GetHeadRot(vector=True)
                 # origin = norm.GetCoordinate(center) # I do not need it
                 rvec, svec = norm.GetParams()
-                
                 rotation_matrix=norm.GetHeadRot(vector=False)
                 rotation_matrix_flipped=dpc.FlipRot(head)
 
-                re = 0.5*(Fc[:,0] + Fc[:,1]) # center of left eye in 3D CCS
-                le = 0.5*(Fc[:,2] + Fc[:,3]) # center of right eye in 3D CCS
+                re = 0.5*(Fc[:,133] + Fc[:,33])
+                le = 0.5*(Fc[:,263] + Fc[:,362])
                 print("right eye 3d", re)
 
-                
                 # Show camera image with landmarks
                 cv2.imshow("Cam image", image)
                 # Show normalized image

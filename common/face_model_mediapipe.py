@@ -1,12 +1,13 @@
 """
-Source: https://github.com/hysts/pytorch_mpiigaze_demo/blob/master/ptgaze/common/face_model_mediapipe.py
+Source: 
+https://github.com/hysts/pytorch_mpiigaze_demo/blob/master/ptgaze/common/face_model_mediapipe.py
 """
 
 import dataclasses
 
 import numpy as np
 
-from ..face_model import FaceModel
+from common.face_model import FaceModel
 
 
 @dataclasses.dataclass(frozen=True)

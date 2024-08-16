@@ -19,7 +19,7 @@ class norm:
             print("There are some errors in inputs")
             exit()
 
-        self.newfocal = newfocal 
+        self.newfocal = newfocal
         self.newdistance = newdistance
         self.curdistance = np.linalg.norm(self.center)
    
@@ -44,12 +44,12 @@ class norm:
         #  Matrix: S, R, M=S*R, C_n, W=C_n*M*(C)^-1
         #  Also provide gaze vec and head rotation matrix 
         self.S_mat = np.array([
-            [1,0,0], 
-            [0,1,0], 
+            [1,0,0],
+            [0,1,0],
             [0,0, self.newdistance/self.curdistance]])
-        
+
         xaxis = self.headrotvec[:,0]
-        
+
         z = self.center / self.curdistance
         y = np.cross(z, xaxis)
         y = y /np.linalg.norm(y)
@@ -76,16 +76,6 @@ class norm:
     def GetCoordinate(self, coordinate):
         coordinate = np.reshape(coordinate, (3,1))
         return np.dot(self.M_mat, coordinate).flatten()
-
-    # def GetGaze(self, scale=True):
-    #     if scale:
-    #         gaze = np.dot(self.M_mat, self.gaze)
-    #         gaze = gaze / np.linalg.norm(gaze)
-    #     else:
-    #         gaze = np.dot(self.R_mat, self.gaze)
-    #         gaze = gaze / np.linalg.norm(gaze)
-
-    #     return gaze
 
     def GetHeadRot(self, vector=True):
         if vector:

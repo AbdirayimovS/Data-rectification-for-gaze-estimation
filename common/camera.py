@@ -1,10 +1,10 @@
 """Source code: https://github.com/hysts/pytorch_mpiigaze_demo/blob/master/ptgaze/common"""
 import dataclasses
-import pickle
 from typing import Optional
 
 import cv2
 import numpy as np
+import yaml
 
 
 @dataclasses.dataclass()
@@ -17,13 +17,13 @@ class Camera:
 
     def __post_init__(self, camera_params_path):
         with open(camera_params_path) as f:
-            data = pickle.load(f)
-        self.width = 640  # data['image_width']
-        self.height = 480  # data['image_height']
-        self.camera_matrix = np.array(data['mtx']).reshape(
+            data = yaml.safe_load(f)
+        self.width = data['image_width']
+        self.height = data['image_height']
+        self.camera_matrix = np.array(data['camera_matrix']['data']).reshape(
             3, 3)
         self.dist_coefficients = np.array(
-            data['dist']).reshape(-1, 1)
+            data['distortion_coefficients']['data']).reshape(-1, 1)
 
     def project_points(self,
                        points3d: np.ndarray,
@@ -31,9 +31,9 @@ class Camera:
                        tvec: Optional[np.ndarray] = None) -> np.ndarray:
         assert points3d.shape[1] == 3
         if rvec is None:
-            rvec = np.zeros(3, dtype=np.float)
+            rvec = np.zeros(3, dtype=np.float64)
         if tvec is None:
-            tvec = np.zeros(3, dtype=np.float)
+            tvec = np.zeros(3, dtype=np.float64)
         points2d, _ = cv2.projectPoints(points3d, rvec, tvec,
                                         self.camera_matrix,
                                         self.dist_coefficients)

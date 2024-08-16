@@ -8,41 +8,27 @@
 # 4. MPIIGaze also provides the matlab file for the 3D Face Model 
 
 import pickle
+import yaml
 
 import numpy as np
 import cv2
 import mediapipe as mp
 import scipy.io as sio
 
+from common.face_model_mediapipe import FaceModelMediaPipe
+
+with open("calib_cam0.yaml", "r") as file:
+    calib_data = yaml.safe_load(file)
 
 
-with open("calib_cam0.pkl", "rb") as file:
-    calib_data = pickle.load(file)
 
 
-# TEMPLATE_LANDMARK_INDEX = [
-#     33, 160, 158, 144, 153, 133, # left eye indeces
-#     263, 362, 380, 373, 384, 386, # left eye indeces from the man in the page point of view
-#     168, 197, 5, 4, 2, # nose indeces
-#     61, 291, # lips corner left-to-right
-#     148, 152, 377 # chin
-#     ]
+TEMPLATE_LANDMARK_INDEX = list(range(468))  # [33, 133, 362, 263, 61, 291] # based on 2 right eye, 2 left eye and 2 mouth
 
-# TEMPLATE_LANDMARK_INDEX = [1, 152, 33, 263, 61, 291] # Based on the 6-point based face model
-TEMPLATE_LANDMARK_INDEX = [33, 133, 362, 263, 61, 291] # based on 2 right eye, 2 left eye and 2 mouth
-# TEMPLATE_LANDMARK_INDEX = [
-#     33, 160,  153, 133, # left eye indeces
-#     263, 362,  384, 386, # left eye indeces from the man in the page point of view
-#     168, 4, 2, # nose indeces
-#     61, 291, # lips corner left-to-right
-#     152 # chin
-#     ]
+FACE_KEY_LANDMARK_INDEX = [0, 9, 20]
 
-TEMPLATE_FACE_3D_V1 = []
-FACE_KEY_LANDMARK_INDEX = [0, 1, 2, 3, 4, 5] # [0, 9, 20]
-
-camera_matrix = np.array(calib_data['mtx']) 
-camera_distortion = np.array(calib_data['dist'])
+camera_matrix = np.array(calib_data['camera_matrix']['data']).reshape(3, 3)
+camera_distortion = np.array(calib_data['distortion_coefficients']['data']).reshape(-1, 1)
 
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
@@ -77,85 +63,55 @@ def showInMovedWindow(winname, img, x, y):
 
 def estimateHeadPose(landmarks, face_model, camera, distortion, iteration=True):
     ret, rvec, tvec = cv2.solvePnP(face_model, landmarks, camera, distortion, flags=cv2.SOLVEPNP_EPNP)
-
     if iteration:
         ret, rvec, tvec = cv2.solvePnP(face_model, landmarks, camera, distortion, rvec, tvec, True)
-
     return rvec, tvec
 
 def normalizeFace(img, face, hr, ht, camera_matrix, distortion):
-    focal_norm = 960
-    distance_norm = 600
-    roiSize=(300, 300)
-
+    focal_norm = 1600
+    distance_norm = 1.0
+    roiSize=(224, 224)
     ht = ht.reshape((3, 1)) # head translation vector
-
     # Pose rotation vector converted to a rotation matrix
     hR = cv2.Rodrigues(hr)[0] # rotation matrix
 
-    full_face_model_3d_coordinates = np.load("sfm_shape_3448_swook_sted_ready_numpy.npy")
-    
-    points_2d = cv2.projectPoints(full_face_model_3d_coordinates, hr, ht,
-                                 camera_matrix, distortion)[0].reshape(-1, 2)
-    ih, iw, _ = img.shape
-    if np.any(points_2d < 0.0) or np.any(points_2d[:, 0] > iw) \
-            or np.any(points_2d[:, 1] > ih):
-        tmp_image = np.copy(img[:, :, ::-1])
-        for x, y in points_2d:
-            cv2.drawMarker(tmp_image, (int(x), int(y)), color=[0, 0, 255],
-                          markerType=cv2.MARKER_CROSS,
-                          markerSize=2, thickness=1)
-        print('img skipped. Landmarks outside of frame!')
-        cv2.imshow('failed', tmp_image)
-        cv2.waitKey(1)
-        return
-    
     Fc = np.dot(hR, face) + ht # 3D positions of facial landmarks
-    
     center = np.zeros(np.array(Fc[:, 0]).shape)
     for index in FACE_KEY_LANDMARK_INDEX:
         center += np.array(Fc[:,index])
     center = np.array([ center / len(FACE_KEY_LANDMARK_INDEX) ]).reshape((3,1))
 
-
-
     # actual distance bcenterween eye and original camera
     distance = np.linalg.norm(center) # actual distance between eye and original camera
     z_scale = distance_norm/distance
-
     # C_n: camera projection matrix for the normalized camera
     cam_norm = np.array([
        [focal_norm, 0, roiSize[0]/2],
        [0, focal_norm, roiSize[1]/2],
        [0, 0, 1.0],
     ])
-
     # scaling matrix
     S = np.array([
        [1.0, 0.0, 0.0],
        [0.0, 1.0, 0.0],
        [0.0, 0.0, z_scale],
     ])
-    
     # x_r: x-axis of the head coordinate system
     hRx = hR[:,0]
 
     # z-axis
     forward = (center/distance).reshape(3)
     down = np.cross(forward, hRx)
-    down /= np.linalg.norm(down) 
+    down /= np.linalg.norm(down)
     right = np.cross(down, forward)
     right /= np.linalg.norm(right)
 
     # rotation matrix R
     R = np.c_[right, down, forward].T # rotation matrix R
-    
     # Transformation Matrix M (For 3D input)
     M = np.dot(S, R)
-
-    # transformation matrix 
+    # transformation matrix
     W = np.dot(cam_norm, np.dot(M, np.linalg.inv(camera_matrix)))
-
     # image normalization
     img_warped = cv2.warpPerspective(img, W, roiSize)
     return img_warped
@@ -165,9 +121,11 @@ def face_detect(image_shape, multi_face_landmark):
     width = image_shape[1]
 
     landmarks = np.empty((0,2), dtype=np.float64)
+    # print(f"length of the LANDMARK_INDEX: {TEMPLATE_LANDMARK_INDEX=}")
     for index in TEMPLATE_LANDMARK_INDEX:
         landmark = multi_face_landmark.landmark[index]
         landmarks = np.append(landmarks, np.array([[min(width, landmark.x*width), min(height, landmark.y*height)]]), axis=0)
+
     return landmarks, face_center(landmarks)
 
 def face_center(landmarks):
@@ -177,11 +135,9 @@ def face_center(landmarks):
     return np.array([ center / len(FACE_KEY_LANDMARK_INDEX) ])
 
 def main():
-    # Find 3D Standard Face Points
-    face = generate_3d_face() # the template to compare the objects 
-    num_pts = face.shape[1] # COMMENT: I add for the 6-point face model 
+    face = FaceModelMediaPipe().LANDMARKS
+    num_pts = face.shape[0] # COMMENT: I add for the 6-point face model 
     facePts = face.reshape(num_pts, 1, 3)
-   
 
     # For webcam input:
     cap = cv2.VideoCapture(0)
@@ -194,13 +150,10 @@ def main():
         min_tracking_confidence=0.5) as face_mesh:
         while cap.isOpened():
             success, image = cap.read()
-
             image = cv2.undistort(image, camera_matrix, camera_distortion) # I added it
-
             if not success:
                 print("Ignoring empty camera frame.")
                 continue
-
             image.flags.writeable = False
             results = process_image(image, face_mesh)
 
@@ -213,14 +166,13 @@ def main():
                 
                 # Convert 2D landmark pixels to 3D
                 landmarks = landmarks.astype(np.float32)
-                
                 landmarks = landmarks.reshape(num_pts, 1, 2)
-
+                # print(f"Length of landmarks: {len(landmarks)}")
+                # print(f"facePts is {facePts.shape}")
                 # Get rotational/translation shift
                 hr, ht = estimateHeadPose(landmarks, facePts, camera_matrix, camera_distortion) # solvePnP needs 3D model for comparison with landmarks of mediapipe
-         
-                processed_face2 = normalizeFace(image, face, hr, ht, camera_matrix, camera_distortion) # COMMENT: for 6-point based model
-
+                # print(f"shape of hr and ht: {hr.shape} and {ht.shape}")
+                processed_face2 = normalizeFace(image, face.reshape(3, 468), hr, ht, camera_matrix, camera_distortion)
                 # Show camera image with landmarks
                 cv2.imshow("Cam image", image)
                 # Show normalized image
