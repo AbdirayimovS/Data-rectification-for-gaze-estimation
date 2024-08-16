@@ -131,7 +131,7 @@ def normalizeFace(img, face, hr, ht, camera_matrix, distortion):
     ])
 
     # scaling matrix
-    S = np.array([ 
+    S = np.array([
        [1.0, 0.0, 0.0],
        [0.0, 1.0, 0.0],
        [0.0, 0.0, z_scale],
@@ -155,7 +155,7 @@ def normalizeFace(img, face, hr, ht, camera_matrix, distortion):
 
     # transformation matrix 
     W = np.dot(cam_norm, np.dot(M, np.linalg.inv(camera_matrix)))
-        
+
     # image normalization
     img_warped = cv2.warpPerspective(img, W, roiSize)
     return img_warped

@@ -117,7 +117,7 @@ def main():
     undistort = Undistorter()
 
     # Find 3D Standard Face Points
-    face = generate_3d_face() # the template to compare the objects 
+    face = generate_3d_face() # the template to compare the objects
     num_pts = face.shape[1] # COMMENT: I add for the 6-point face model 
     facePts = face.reshape(num_pts, 1, 3)
    
