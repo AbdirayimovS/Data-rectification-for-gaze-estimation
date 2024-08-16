@@ -187,14 +187,15 @@ def main():
                 im_right = norm.CropEye(rlc, rrc)
 
                 head = norm.GetHeadRot(vector=True)
-                origin = norm.GetCoordinate(center)
+                # origin = norm.GetCoordinate(center) # I do not need it
                 rvec, svec = norm.GetParams()
                 
                 rotation_matrix=norm.GetHeadRot(vector=False)
                 rotation_matrix_flipped=dpc.FlipRot(head)
 
-                re = 0.5*(Fc[:,0] + Fc[:,1]).reshape((3,1)) # center of left eye in 3D CCS
-                le = 0.5*(Fc[:,2] + Fc[:,3]).reshape((3,1)) # center of right eye in 3D CCS
+                re = 0.5*(Fc[:,0] + Fc[:,1]) # center of left eye in 3D CCS
+                le = 0.5*(Fc[:,2] + Fc[:,3]) # center of right eye in 3D CCS
+                print("right eye 3d", re)
 
                 
                 # Show camera image with landmarks
