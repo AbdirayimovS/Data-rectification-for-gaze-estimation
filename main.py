@@ -14,6 +14,7 @@ import numpy as np
 import cv2
 import mediapipe as mp
 import scipy.io as sio
+from scipy.spatial.transform import Rotation
 
 from common.face_model_mediapipe import FaceModelMediaPipe
 
@@ -108,12 +109,59 @@ def normalizeFace(img, face, hr, ht, camera_matrix, distortion):
 
     # rotation matrix R
     R = np.c_[right, down, forward].T # rotation matrix R
+
     # Transformation Matrix M (For 3D input)
     M = np.dot(S, R)
     # transformation matrix
     W = np.dot(cam_norm, np.dot(M, np.linalg.inv(camera_matrix)))
     # image normalization
     img_warped = cv2.warpPerspective(img, W, roiSize)
+
+    hR_norm = np.dot(R, hR) # rotation matrix in normalized space
+    hr_norm = cv2.Rodrigues(hR_norm)[0] # convert rotation matrix to rotation vectors
+    # print(hr_norm.reshape(-1))
+
+    # assert np.any(R) < -1 
+    # assert np.any(R) > 1
+    # print("rotation is vector of 3: ", hr_norm)
+    # print(Rotation.from_matrix(hR_norm).as_quat())  # Convert from -1, 1 to 0, 1
+    assert np.all(Rotation.from_rotvec(hr_norm.reshape(-1)).as_quat()) == np.all(Rotation.from_matrix(hR_norm).as_quat())
+    # this rotation matrix will be used as for the gaze model
+    #~~~~~~~FLIPPED ROTATION MATRIX~~~~~~~~~~~
+    rotation = Rotation.from_matrix(hR_norm)
+    rot_mat = rotation.as_matrix()
+    reflection_matrix = np.diag([-1, 1, 1])
+    flipped_rot_mat = np.dot(reflection_matrix, rot_mat)
+    flipped_rotation = Rotation.from_matrix(flipped_rot_mat)
+    flipped_quat = flipped_rotation.as_quat()
+    assert np.isclose(np.linalg.norm(flipped_quat), 1.0), "Flipped quaternion is not normalized"
+
+    print(Rotation.from_matrix(hR_norm).as_quat())
+    print(flipped_quat)
+    """
+    """
+
+
+
+
+    #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    # EYES 3D Position 
+    re = 0.5*(Fc[:,33] + Fc[:,133]) # center of right eye in 3D CCS
+    le = 0.5*(Fc[:,263] + Fc[:,362]) # center of left eye in 3D CCS 
+
+    re = re / np.linalg.norm(re)
+    le = le / np.linalg.norm(le)
+
+    re_rescaled = (re + 1) / 2
+    le_rescaled = (le + 1) / 2
+    # print(re_rescaled, le_rescaled)
+
+    assert np.all(re_rescaled) >= 0
+    assert np.all(re_rescaled) <= 1
+    assert np.all(le_rescaled) <= 1
+    assert np.all(le_rescaled) >= 0
+
     return img_warped
 
 def face_detect(image_shape, multi_face_landmark):
@@ -173,6 +221,8 @@ def main():
                 hr, ht = estimateHeadPose(landmarks, facePts, camera_matrix, camera_distortion) # solvePnP needs 3D model for comparison with landmarks of mediapipe
                 # print(f"shape of hr and ht: {hr.shape} and {ht.shape}")
                 processed_face2 = normalizeFace(image, face.reshape(3, 468), hr, ht, camera_matrix, camera_distortion)
+
+
                 # Show camera image with landmarks
                 cv2.imshow("Cam image", image)
                 # Show normalized image
