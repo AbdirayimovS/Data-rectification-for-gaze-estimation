@@ -48,6 +48,12 @@ def draw_point(image, mat, spec):
         idx +=1
 
 
+def check_existance_of_eyes(image, landmarks)->bool:
+    height, width, _ = image.shape
+    for idx in [33, 133, 362, 263]:
+        if 0>=landmarks[idx][0] or landmarks[idx][0] >= width: return False
+        if 0>=landmarks[idx][1] or landmarks[idx][1] >= height: return False
+    return True
 
 def process_image(image, face_mesh):
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -140,12 +146,14 @@ def main():
                 # Get key face landmarks in 2D pixels
                 landmarks, center = face_detect(image.shape, results.multi_face_landmarks[0])
                 image.flags.writeable = True
+                if not check_existance_of_eyes(image, landmarks): return
                 draw_point(image, landmarks, point_drawing) # the landmarks
                 draw_point(image, center, point_center_drawing) # the green is the cente of the face
                 
                 # Convert 2D landmark pixels to 3D
                 landmarks = landmarks.astype(np.float32)
                 reshaped_landmarks = landmarks.reshape(num_pts, 1, 2)
+
         
                 # Get rotational/translation shift
                 hr, ht = estimateHeadPose(reshaped_landmarks, facePts, camera_matrix, camera_distortion) # solvePnP needs 3D model for comparison with landmarks of mediapipe
@@ -184,7 +192,8 @@ def main():
 
                 re = 0.5*(Fc[:,133] + Fc[:,33])
                 le = 0.5*(Fc[:,263] + Fc[:,362])
-                print("right eye 3d", re)
+                # print("right eye 3d", re, le)
+                print("rotation is vector of 3: ", norm.R_mat)
 
                 # Show camera image with landmarks
                 cv2.imshow("Cam image", image)
@@ -206,8 +215,6 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
 
 """
 Copyright 2019 ETH Zurich, Seonwook Park

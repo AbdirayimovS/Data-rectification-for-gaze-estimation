@@ -31,7 +31,7 @@ class Demo:
         self.stop = False
         self.show_bbox = True
         self.show_head_pose = True
-        self.show_landmarks = True
+        self.show_landmarks = False
         self.show_normalized_image = True
         self.show_template_model =True
 
@@ -150,11 +150,12 @@ class Demo:
         # Draw the axes of the model coordinate system
         length = 0.05
         self.visualizer.draw_model_axes(face, length, lw=2)
-
+        
         euler_angles = face.head_pose_rot.as_euler('XYZ', degrees=True)
+        logger.info(f"{euler_angles=}")
         pitch, yaw, roll = face.change_coordinate_system(euler_angles)
-        logger.info(f'[head] pitch: {pitch:.2f}, yaw: {yaw:.2f}, '
-                    f'roll: {roll:.2f}, distance: {face.distance:.2f}')
+        # logger.info(f'[head] pitch: {pitch:.2f}, yaw: {yaw:.2f}, '
+        #             f'roll: {roll:.2f}, distance: {face.distance:.2f}')
 
     def _draw_landmarks(self, face: Face) -> None:
         if not self.show_landmarks:

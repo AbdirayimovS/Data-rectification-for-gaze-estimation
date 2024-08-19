@@ -57,10 +57,12 @@ class norm:
         x = x/np.linalg.norm(x)
 
         self.R_mat = np.array([x,y,z])
+        #^^^^^^^^^ is normalizing rot.
         self.C_mat = np.array([[self.newfocal, 0, self.imsize[0]/2], [0, self.newfocal, self.imsize[1]/2], [0, 0, 1]])
         self.M_mat = np.dot(self.S_mat, self.R_mat)
+        #^^^^^^^^^ this is affected by normalized rotation vector
         self.W_mat = np.dot(np.dot(self.C_mat, self.M_mat), np.linalg.inv(self.cameraparams))
-        # self.gaze = self.target - self.center # this is gaze direction 
+        # self.gaze = self.target - self.center # this is gaze direction
 
     
     def GetParams(self):
